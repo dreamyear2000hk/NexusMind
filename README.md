@@ -1,122 +1,159 @@
-# NexusMind — 智脈引擎
+# NexusMind — AI Memory Engine / 智脈引擎
 
-> AI 個人記憶引擎，讓你的 AI Agent 真正記住一切
+> Give your AI Agent a memory that truly lasts | 讓你的 AI 真正記住一切
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## 特性
+**[English](#english) · [中文](#中文) · [Quick Start](#quick-start--快速開始) · [API](#api-reference--api-參考)**
 
-- **意圖路由** — 自動分類消息（fact/alert/memory/reason/skill），決定如何記憶
-- **設備版本化** — 追蹤設備配置變更，保留完整歷史
-- **遺忘算法** — 自動清理低價值記憶，保持系統輕量（W = W_time × W_freq × W_affinity）
-- **零外部依賴** — 純 Python 標準庫
-- **可選 HA** — 可連接 Home Assistant，也可純本地運行
+---
 
-## 安裝（30秒完成）
+## 中文 Chinese
 
-### 方式一：直接下載 .skill 文件
+### 這是什麼？
 
-```bash
-# 把 NexusMind.skill 放到 OpenClaw skills 目錄
-cp NexusMind.skill ~/.openclaw/workspace/skills/
+NexusMind（智脈引擎）是一套 **AI 個人記憶管理系統**，基於 Karpathy 的 LLM-Wiki Pattern 設計。專為 AI Agent 打造，讓 AI 不再每次從零開始。
 
-# 運行安裝向導
-python3 ~/.openclaw/workspace/skills/NexusMind/install.py
+### 核心功能
+
+| 功能 | 說明 |
+|------|------|
+| **意圖路由** | 自動分類消息（fact/alert/memory/reason/skill），決定如何記憶 |
+| **設備版本化** | 追蹤設備配置變更，自動保留歷史版本 |
+| **遺忘算法** | 自動清理低價值記憶，保持系統輕量 |
+| **零外部依賴** | 純 Python 標準庫 |
+| **可選 HA** | 可連接 Home Assistant，也可純本地運行 |
+
+### 熱度公式
+
+```
+W = W_time * (1 + W_freq) * W_affinity
+  = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
 ```
 
-### 方式二：從源碼安裝
+| W 範圍 | 等級 |
+|--------|------|
+| >= 0.8 | 核心昇級候選 |
+| 0.3-0.8 | 長期記憶（保留）|
+| 0-0.3 | 短期記憶（30天後刪除）|
+
+### 安裝
 
 ```bash
-git clone https://github.com/your-repo/NexusMind.git
+# 方式一：直接使用 .skill 文件
+cp NexusMind.skill ~/.openclaw/workspace/skills/
+
+# 方式二：從源碼
+git clone https://github.com/dreamyear2000hk/NexusMind.git
 cd NexusMind
 python3 install.py
 ```
 
-## 快速開始
+---
+
+## English
+
+### What is NexusMind?
+
+NexusMind is an **AI personal memory management system** inspired by Karpathy's LLM-Wiki Pattern. Built for AI Agents — so your AI never starts from scratch again.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Intent Routing** | Auto-classifies messages (fact/alert/memory/reason/skill) and decides how to remember |
+| **Device Versioning** | Tracks device config changes, auto-archives history |
+| **Forgetting Algorithm** | Auto-prunes low-value memories, keeps system lightweight |
+| **Zero Dependencies** | Pure Python standard library |
+| **Optional HA** | Can connect Home Assistant, or run pure local |
+
+### Hotness Formula
+
+```
+W = W_time * (1 + W_freq) * W_affinity
+  = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
+```
+
+| W Range | Result |
+|---------|--------|
+| >= 0.8 | Core upgrade candidate |
+| 0.3-0.8 | Long-term memory (keep) |
+| 0-0.3 | Short-term memory (delete after 30 days) |
+
+### Install
+
+```bash
+# Method 1: Use .skill file directly
+cp NexusMind.skill ~/.openclaw/workspace/skills/
+
+# Method 2: From source
+git clone https://github.com/dreamyear2000hk/NexusMind.git
+cd NexusMind
+python3 install.py
+```
+
+---
+
+## Quick Start / 快速開始
 
 ```python
-# 意圖路由
+# Intent Classification / 意圖分類
 from intent_classifier import route
 
 result = route("老闆在家嗎")
-# → {"category": "fact", "task_intent": "fact", "recall_strategy": "keyword"}
+# {"category": "fact", "task_intent": "fact", "recall_strategy": "keyword"}
 
-# 查詢記憶
+# Query Memory / 查詢記憶
 from memory_query import query
 r = query("上次那個問題怎麼解決")
-# → {"intent": "memory", "answer": "...", "found": 3}
+# {"intent": "memory", "answer": "...", "found": 3}
 ```
 
-## 架構
+---
+
+## Architecture / 架構
 
 ```
-┌─────────────────────────────────────────┐
-│           每條消息輸入                    │
-└─────────────────┬───────────────────────┘
-                  ▼
-┌─────────────────────────────────────────┐
-│     intent_classifier.route()           │
-│  意圖分類 → task_intent → recall策略    │
-└─────────────────┬───────────────────────┘
-                  ▼
-   ┌──────────────┼──────────────┐
-   ▼              ▼              ▼
- fact/memory  reason/alert    skill/unknown
-   │              │              │
-   ▼              ▼              ▼
- keyword       semantic       exact
- 召回           召回          召回
-   │              │              │
-   ▼              ▼              ▼
-┌─────────────────────────────────────────┐
-│     device_versioning.py                │
-│     設備變更 → 版本化歸檔               │
-└─────────────────┬───────────────────────┘
-                  ▼
-┌─────────────────────────────────────────┐
-│       forgetting.py (每天 03:00)        │
-│   W < 0.3 → 刪除 | W 0.3-0.8 → 保留    │
-│   W ≥ 0.8 → 核心昇級                   │
-└─────────────────────────────────────────┘
+Message Input
+       |
+       v
+intent_classifier.route()
+  Category -> Task Intent -> Recall Strategy
+       |
+       v
+  +------------+-------------+
+  |            |             |
+  v            v             v
+fact/memory reason/skill  unknown
+  |            |             |
+  v            v             v
+keyword     semantic      exact
+  |            |             |
+  v            v             v
+device_versioning.py      |
+  Device change -> archive  |
+       |                    v
+       v                    v
+  forgetting.py (daily 03:00)
+  W < 0.3 -> delete
 ```
 
-## 配置
+---
 
-編輯 `~/.openclaw/workspace/data/nexusmind/config.json`：
-
-```json
-{
-  "workspace": "~/.openclaw/workspace",
-  "ha_url": "http://localhost:8123",
-  "ha_token": "你的HA_TOKEN",
-  "cron_time": "03:00",
-  "devices": ["192.168.1.100", "192.168.1.101"]
-}
-```
-
-## API 參考
+## API Reference / API 參考
 
 ### intent_classifier.route(text)
 
 ```python
 result = route("Bigcore0溫度多少")
-# {
-#   "category": "alert",       # 意圖類別
-#   "task_intent": "fact",     # 任務意圖
-#   "recall_strategy": "keyword" # 回憶策略
-# }
+# {"category": "alert", "task_intent": "fact", "recall_strategy": "keyword"}
 ```
 
 ### memory_query.query(text, intent?)
 
 ```python
 r = query("上次那個問題怎麼解決")
-# {
-#   "intent": "memory",
-#   "answer": "...",
-#   "source": "...",
-#   "found": 3
-# }
+# {"intent": "memory", "answer": "...", "found": 3}
 ```
 
 ### device_versioning.check_device_changes()
@@ -133,12 +170,28 @@ result = run_dream_cycle(dry_run=True)
 # {"purged": 0, "upgraded": 0, "total": 3958}
 ```
 
-## 許可證
+---
 
-MIT License — 可自由使用、修改、商業化
+## Configuration / 配置
 
-## 致謝
+```json
+{
+  "workspace": "~/.openclaw/workspace",
+  "ha_url": "http://localhost:8123",
+  "ha_token": "your_token_here",
+  "cron_time": "03:00",
+  "devices": []
+}
+```
 
-- **Karpathy** — [LLM-Wiki Pattern](https://github.com/karpathy/llm-wiki) 理論基礎
-- **OpenClaw** — Agent 框架
-- **Mem0** — 智能記憶系統參考
+---
+
+## License / 許可證
+
+MIT License — Free to use, modify, commercialize / 可自由使用、修改、商業化
+
+## Acknowledgements / 致謝
+
+- **Karpathy** — [LLM-Wiki Pattern](https://github.com/karpathy/llm-wiki) Theory
+- **OpenClaw** — Agent Framework
+- **Mem0** — Intelligent Memory System Reference
