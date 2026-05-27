@@ -237,9 +237,9 @@ def check_device_changes() -> dict:
     """檢查文檔內已知設備的當前狀態，檢測是否需要版本化"""
     # 從 TOOLS.md 讀取設備 IP（這些是我們「已知」的當前值）
     known_devices = {
-        "aio-server-ssh.md": "172.16.100.194",
-        "home-assistant-vm.md": "172.16.100.9",
-        "frigate-nvr.md": "172.18.0.2",
+        "aio-server-ssh.md": "192.168.1.100",
+        "home-assistant-vm.md": "192.168.1.101",
+        "frigate-nvr.md": "192.168.1.102",
     }
 
     results = {}
@@ -275,7 +275,7 @@ superseded_by: null
 
 | 項目 | 值 |
 |-----|-----|
-| IP 地址 | `172.16.100.194` |
+| IP 地址 | `192.168.1.100` |
 | SSH 端口 | `22` |
 """
     front, body = parse_frontmatter(sample)
@@ -291,7 +291,7 @@ superseded_by: null
 
     # Test 3: extract_ip_from_body
     ip = extract_ip_from_body(sample)
-    assert ip == "172.16.100.194", f"IP extraction wrong: {ip}"
+    assert ip == "192.168.1.100", f"IP extraction wrong: {ip}"
     print("✅ Test 3: extract_ip_from_body OK")
 
     # Test 4: is_device_node
