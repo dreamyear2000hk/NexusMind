@@ -20,8 +20,6 @@ MEM_DIR    = WORKSPACE / "memory"
 DATA_DIR   = WORKSPACE / "data"
 SKILLS_DIR = WORKSPACE / "skills"
 
-HA_URL = "http://172.16.100.9:8123"
-
 HA_URL = _get_ha_url() or "http://localhost:8123"
 
 def _ha_token():
