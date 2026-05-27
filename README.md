@@ -114,9 +114,9 @@ NexusMind 有三個核心模組，協作方式如下：
                    |            |         |
                    v            v         +-- task=unknown  -->  跳過（問候/噪聲）
                 keyword      semantic       |
-                   |            |         +-- task=learning -->  送 Qwen LLM
+                   |            |         +-- task=learning -->  送 LLM 處理
                    |            |         |
-                   |            |         +-- task=skill ----->  送 Qwen LLM
+                   |            |         +-- task=skill ----->  送 LLM 處理
                    v            v
             +-----------------------------+
             |    memory_query.query()    |
@@ -187,8 +187,8 @@ category = skill ? ----yes----> recall = exact（精確匹配）
 category = unknown
     |
     +-- task_intent = unknown ----->  跳過（問候/純噪聲）
-    +-- task_intent = learning --->  送 Qwen LLM 處理
-    +-- task_intent = skill ------>  送 Qwen LLM 處理
+    +-- task_intent = learning --->  送 LLM 處理 處理
+    +-- task_intent = skill ------>  送 LLM 處理 處理
 ```
 
 ---
