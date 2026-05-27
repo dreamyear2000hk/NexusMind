@@ -1,0 +1,51 @@
+{
+  "name": "nexusmind",
+  "description": "Personal memory engine — intent routing, device versioning, and forgetting algorithm for smart home and AI infrastructure",
+  "version": "1.0.0",
+  "platforms": ["linux", "macos", "windows"],
+  "entry_points": {
+    "slash_command": "nexusmind",
+    "scripts": {
+      "intent_test": "python3 scripts/intent_classifier.py",
+      "device_check": "python3 scripts/device_versioning.py --test",
+      "device_init": "python3 scripts/device_versioning.py init",
+      "forgetting_dry": "python3 scripts/forgetting.py --dry-run",
+      "forgetting_run": "python3 scripts/forgetting.py"
+    }
+  },
+  "config_schema": {
+    "workspace": {
+      "type": "string",
+      "default": "~/.hermes",
+      "description": "Hermes workspace root"
+    },
+    "ha_url": {
+      "type": "string",
+      "default": "http://localhost:8123",
+      "description": "Home Assistant API URL"
+    },
+    "ha_token": {
+      "type": "string",
+      "default": "",
+      "description": "Home Assistant long-lived access token"
+    },
+    "cron_time": {
+      "type": "string",
+      "default": "03:00",
+      "description": "Cron time for forgetting algorithm (HH:MM)"
+    }
+  },
+  "triggers": [
+    "AIO打卡",
+    "AIO溫度",
+    "老闆在家",
+    "設備狀態",
+    "IP是多少",
+    "上次",
+    "曾經",
+    "記得",
+    "哪個傳感器聯動",
+    "遺忘",
+    "記憶系統"
+  ]
+}
