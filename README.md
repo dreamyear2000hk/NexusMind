@@ -4,7 +4,7 @@
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[English](#english) · [中文](#中文) · [Quick Start](#quick-start--快速開始) · [API](#api-reference--api-參考)**
+**[English](#english) · [中文](#中文) · [Quick Start](#quick-start--快速開始) · [Architecture](#architecture--架構) · [API](#api-reference--api-參考)**
 
 ---
 
@@ -18,17 +18,17 @@ NexusMind（智脈引擎）是一套 **AI 個人記憶管理系統**，基於 Ka
 
 | 功能 | 說明 |
 |------|------|
-| **意圖路由** | 自動分類消息（fact/alert/memory/reason/skill），決定如何記憶 |
-| **設備版本化** | 追蹤設備配置變更，自動保留歷史版本 |
-| **遺忘算法** | 自動清理低價值記憶，保持系統輕量 |
+| **意圖路由** | 每條消息自動分類（fact/alert/memory/reason/skill/unknown），決定如何記憶 |
+| **設備版本化** | cron 追蹤設備配置變更，自動保留歷史版本 |
+| **遺忘算法** | 每天自動清理低價值記憶，保持系統輕量 |
 | **零外部依賴** | 純 Python 標準庫 |
 | **可選 HA** | 可連接 Home Assistant，也可純本地運行 |
 
 ### 熱度公式
 
 ```
-W = W_time * (1 + W_freq) * W_affinity
-  = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
+W  = W_time * (1 + W_freq) * W_affinity
+   = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
 ```
 
 | W 範圍 | 等級 |
@@ -61,17 +61,17 @@ NexusMind is an **AI personal memory management system** inspired by Karpathy's 
 
 | Feature | Description |
 |---------|-------------|
-| **Intent Routing** | Auto-classifies messages (fact/alert/memory/reason/skill) and decides how to remember |
-| **Device Versioning** | Tracks device config changes, auto-archives history |
-| **Forgetting Algorithm** | Auto-prunes low-value memories, keeps system lightweight |
+| **Intent Routing** | Auto-classifies every message (fact/alert/memory/reason/skill/unknown) and decides how to remember |
+| **Device Versioning** | Cron tracks device config changes, auto-archives history |
+| **Forgetting Algorithm** | Daily auto-prunes low-value memories, keeps system lightweight |
 | **Zero Dependencies** | Pure Python standard library |
 | **Optional HA** | Can connect Home Assistant, or run pure local |
 
 ### Hotness Formula
 
 ```
-W = W_time * (1 + W_freq) * W_affinity
-  = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
+W  = W_time * (1 + W_freq) * W_affinity
+   = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
 ```
 
 | W Range | Result |
@@ -94,6 +94,105 @@ python3 install.py
 
 ---
 
+## Architecture / 架構
+
+NexusMind 有三個核心模組，協作方式如下：
+
+```
+                    消息輸入 Message Input
+                           |
+                           v
+            +----------------------------+
+            |  intent_classifier.route() |
+            |  category + task_intent +   |
+            |  recall_strategy            |
+            +----------------------------+
+                     |    |    |    |
+                     v    v    v    v
+                  fact/ memory reason skill unknown
+                  alert          /       \
+                   |            |         |
+                   v            v         +-- task=unknown  -->  跳過（問候/噪聲）
+                keyword      semantic       |
+                   |            |         +-- task=learning -->  送 Qwen LLM
+                   |            |         |
+                   |            |         +-- task=skill ----->  送 Qwen LLM
+                   v            v
+            +-----------------------------+
+            |    memory_query.query()    |
+            |  從 Graph Memory 檢索答案   |
+            |  docs/entities/             |
+            |  docs/events/              |
+            |  docs/concepts/             |
+            +-----------------------------+
+                           |
+     +---------------------+---------------------+
+     |                     |                     |
+     v                     v                     v
++-----------+    +------------------+    +------------------+
+| device_   |    | cron: 每天一次   |    | cron: 每天 03:00  |
+| versioning|    | memory_daily_    |    | forgetting.py     |
+| .py       |    | sync.py         |    |                  |
+|           |    |                 |    | W < 0.3 -> 刪除  |
+| 設備IP變了 |    | 調用所有記憶模組 |    | W >= 0.8 -> 昇級 |
+| -> 歸檔   |    |                  |    +------------------+
+| .vN.md   |    +------------------+              |
+|           |                                   |
++-----------+                                   |
+     |                                          |
+     v                                          v
+  文檔歸檔                                  記憶清理
+```
+
+### 組件說明
+
+| 模組 | 觸發方式 | 作用 |
+|------|---------|------|
+| **intent_classifier.py** | 每條消息實時 | 分類意圖，決定召回策略 |
+| **memory_query.py** | 被動查詢 | 從 graph 檢索事實/關係/概念 |
+| **device_versioning.py** | cron 觸發 | 設備IP變了自動歸檔歷史版本 |
+| **forgetting.py** | cron 每天03:00 | 清理 W < 0.3 的低價值記憶 |
+
+### 意圖分類決策樹
+
+```
+輸入消息
+    |
+    v
+category = fact ? ----yes----> recall = keyword（精確匹配）
+    |
+    no
+    |
+    v
+category = alert ? ----yes----> recall = keyword
+    |
+    no
+    |
+    v
+category = memory ? ----yes----> recall = semantic（語義搜索）
+    |
+    no
+    |
+    v
+category = reason ? ----yes----> recall = semantic
+    |
+    no
+    |
+    v
+category = skill ? ----yes----> recall = exact（精確匹配）
+    |
+    no
+    |
+    v
+category = unknown
+    |
+    +-- task_intent = unknown ----->  跳過（問候/純噪聲）
+    +-- task_intent = learning --->  送 Qwen LLM 處理
+    +-- task_intent = skill ------>  送 Qwen LLM 處理
+```
+
+---
+
 ## Quick Start / 快速開始
 
 ```python
@@ -103,39 +202,13 @@ from intent_classifier import route
 result = route("老闆在家嗎")
 # {"category": "fact", "task_intent": "fact", "recall_strategy": "keyword"}
 
+result = route("什麼是 Karpathy Pattern")
+# {"category": "unknown", "task_intent": "learning", "recall_strategy": "semantic"}
+
 # Query Memory / 查詢記憶
 from memory_query import query
 r = query("上次那個問題怎麼解決")
 # {"intent": "memory", "answer": "...", "found": 3}
-```
-
----
-
-## Architecture / 架構
-
-```
-Message Input
-       |
-       v
-intent_classifier.route()
-  Category -> Task Intent -> Recall Strategy
-       |
-       v
-  +------------+-------------+
-  |            |             |
-  v            v             v
-fact/memory reason/skill  unknown
-  |            |             |
-  v            v             v
-keyword     semantic      exact
-  |            |             |
-  v            v             v
-device_versioning.py      |
-  Device change -> archive  |
-       |                    v
-       v                    v
-  forgetting.py (daily 03:00)
-  W < 0.3 -> delete
 ```
 
 ---
@@ -148,6 +221,12 @@ device_versioning.py      |
 result = route("Bigcore0溫度多少")
 # {"category": "alert", "task_intent": "fact", "recall_strategy": "keyword"}
 ```
+
+| 返回欄位 | 說明 |
+|---------|------|
+| category | 意圖類別（fact/alert/memory/reason/skill/unknown） |
+| task_intent | 任務意圖（fact/learning/skill/unknown） |
+| recall_strategy | 召回策略（keyword/semantic/exact） |
 
 ### memory_query.query(text, intent?)
 
