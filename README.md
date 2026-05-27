@@ -14,6 +14,8 @@
 
 NexusMind（智脈引擎）是一套 **AI 個人記憶管理系統**，基於 Karpathy 的 LLM-Wiki Pattern 設計。專為 AI Agent 打造，讓 AI 不再每次從零開始。
 
+**支援 OpenClaw 和 Hermes 雙框架** — 統一代碼庫，通過 framework.py 自動適配。
+
 ### 核心功能
 
 | 功能 | 說明 |
@@ -22,6 +24,7 @@ NexusMind（智脈引擎）是一套 **AI 個人記憶管理系統**，基於 Ka
 | **設備版本化** | cron 追蹤設備配置變更，自動保留歷史版本 |
 | **遺忘算法** | 每天自動清理低價值記憶，保持系統輕量 |
 | **零外部依賴** | 純 Python 標準庫 |
+| **雙框架支援** | OpenClaw + Hermes，統一代碼庫 |
 | **可選 HA** | 可連接 Home Assistant，也可純本地運行 |
 
 ### 熱度公式
@@ -40,12 +43,13 @@ W  = W_time * (1 + W_freq) * W_affinity
 ### 安裝
 
 ```bash
-# 方式一：直接使用 .skill 文件
+# OpenClaw：用 .skill 文件
 cp NexusMind.skill ~/.openclaw/workspace/skills/
 
-# 方式二：從源碼
-git clone https://github.com/dreamyear2000hk/NexusMind.git
-cd NexusMind
+# Hermes：克隆到 skills 目錄
+cp -r hermes/nexusmind ~/.hermes/skills/
+
+# 或從源碼安裝（自動檢測框架）
 python3 install.py
 ```
 
@@ -57,94 +61,83 @@ python3 install.py
 
 NexusMind is an **AI personal memory management system** inspired by Karpathy's LLM-Wiki Pattern. Built for AI Agents — so your AI never starts from scratch again.
 
+**Supports OpenClaw and Hermes dual frameworks** — unified codebase with automatic framework detection.
+
 ### Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **Intent Routing** | Auto-classifies every message (fact/alert/memory/reason/skill/unknown) and decides how to remember |
+| **Intent Routing** | Auto-classifies every message (fact/alert/memory/reason/skill/unknown) |
 | **Device Versioning** | Cron tracks device config changes, auto-archives history |
-| **Forgetting Algorithm** | Daily auto-prunes low-value memories, keeps system lightweight |
+| **Forgetting Algorithm** | Daily auto-prunes low-value memories |
 | **Zero Dependencies** | Pure Python standard library |
+| **Dual Framework** | OpenClaw + Hermes with unified code |
 | **Optional HA** | Can connect Home Assistant, or run pure local |
-
-### Hotness Formula
-
-```
-W  = W_time * (1 + W_freq) * W_affinity
-   = e^(-age/T) * (1 + log(1 + access_count)) * (1 + affinity)
-```
-
-| W Range | Result |
-|---------|--------|
-| >= 0.8 | Core upgrade candidate |
-| 0.3-0.8 | Long-term memory (keep) |
-| 0-0.3 | Short-term memory (delete after 30 days) |
 
 ### Install
 
 ```bash
-# Method 1: Use .skill file directly
+# OpenClaw: use .skill file
 cp NexusMind.skill ~/.openclaw/workspace/skills/
 
-# Method 2: From source
-git clone https://github.com/dreamyear2000hk/NexusMind.git
-cd NexusMind
-python3 install.py
+# Hermes: clone to skills directory
+cp -r hermes/nexusmind ~/.hermes/skills/
 ```
 
 ---
 
-## Architecture / 架構
-
-NexusMind 有三個核心模組，協作方式如下：
+## Unified Architecture / 統一架構
 
 ```
-                    消息輸入 Message Input
-                           |
-                           v
-            +----------------------------+
-            |  intent_classifier.route() |
-            |  category + task_intent +   |
-            |  recall_strategy            |
-            +----------------------------+
-                     |    |    |    |
-                     v    v    v    v
-                  fact/ memory reason skill unknown
-                  alert          /       \
-                   |            |         |
-                   v            v         +-- task=unknown  -->  跳過（問候/噪聲）
-                keyword      semantic       |
-                   |            |         +-- task=learning -->  送 LLM
-                   |            |         |
-                   |            |         +-- task=skill ----->  送 LLM
-                   v            v
-            +-----------------------------+
-            |    memory_query.query()    |
-            |  從 Graph Memory 檢索答案   |
-            |  docs/entities/             |
-            |  docs/events/              |
-            |  docs/concepts/             |
-            +-----------------------------+
-                           |
-     +---------------------+---------------------+
-     |                     |                     |
-     v                     v                     v
-+-----------+    +------------------+    +------------------+
-| device_   |    | cron: 每天一次   |    | cron: 每天 03:00  |
-| versioning|    | memory_daily_    |    | forgetting.py     |
-| .py       |    | sync.py         |    |                  |
-|           |    |                 |    | W < 0.3 -> 刪除  |
-| 設備IP變了 |    | 調用所有記憶模組 |    | W >= 0.8 -> 昇級 |
-| -> 歸檔   |    |                  |    +------------------+
-| .vN.md   |    +------------------+              |
-|           |                                   |
-+-----------+                                   |
-     |                                          |
-     v                                          v
-  文檔歸檔                                  記憶清理
+NexusMind/
+├── scripts/                  ← 核心邏輯（OpenClaw + Hermes 共享）
+│   ├── framework.py          ← 框架自動檢測（唯一需要知道框架的地方）
+│   ├── intent_classifier.py  ← 核心意圖分類（無框架代碼）
+│   ├── memory_query.py       ← 核心查詢引擎
+│   ├── device_versioning.py  ← 核心版本化
+│   └── forgetting.py         ← 核心遺忘算法
+│
+├── openclaw/                 ← OpenClaw wrapper
+│   └── NexusMind.skill/      ← .skill 文件 + 符號鏈接 → scripts/
+│
+├── hermes/                   ← Hermes wrapper
+│   └── nexusmind/           ← Hermes 適配層 + 符號鏈接 → scripts/
+│
+├── tests/                    ← 統一測試
+│   ├── test_intent.py
+│   ├── test_device_versioning.py
+│   └── test_forgetting.py
+│
+└── docs/                     ← 文檔模板
 ```
 
-### 組件說明
+### framework.py 自動檢測邏輯
+
+```python
+from framework import get_workspace, get_graphs_dir, get_ha_token
+
+# 自動返回正確路徑，無需判斷框架
+workspace  = get_workspace()   # OpenClaw: ~/.openclaw/workspace
+                                # Hermes:  ~/.hermes/skills/nexusmind
+graphs_dir = get_graphs_dir()   # OpenClaw: docs/
+                                # Hermes:  skills/nexusmind/docs/
+ha_token   = get_ha_token()     # 自動讀取對應 config
+```
+
+### OpenClaw 與 Hermes 差異
+
+| 項目 | OpenClaw | Hermes |
+|------|----------|--------|
+| Workspace | `~/.openclaw/workspace` | `~/.hermes/skills/nexusmind` |
+| Memory Files | `docs/{entities,events,concepts}` | `skills/nexusmind/docs/{entities,events,concepts}` |
+| Config | `data/nexusmind/config.json` | `skills/nexusmind/config.json` |
+| State | `data/nexusmind/forgetting_state.json` | `data/forgetting_state.json` |
+| Skills Dir | `skills/` | `~/.hermes/skills/` |
+| 检测方式 | `OPENCLAW` env var | `HERMES_AGENT` env var |
+
+---
+
+## 組件說明
 
 | 模組 | 觸發方式 | 作用 |
 |------|---------|------|
@@ -197,7 +190,7 @@ category = unknown
 
 ```python
 # Intent Classification / 意圖分類
-from intent_classifier import route
+from scripts.intent_classifier import route
 
 result = route("老闆在家嗎")
 # {"category": "fact", "task_intent": "fact", "recall_strategy": "keyword"}
@@ -206,7 +199,7 @@ result = route("什麼是 Karpathy Pattern")
 # {"category": "unknown", "task_intent": "learning", "recall_strategy": "semantic"}
 
 # Query Memory / 查詢記憶
-from memory_query import query
+from scripts.memory_query import query
 r = query("上次那個問題怎麼解決")
 # {"intent": "memory", "answer": "...", "found": 3}
 ```
@@ -253,9 +246,21 @@ result = run_dream_cycle(dry_run=True)
 
 ## Configuration / 配置
 
+### OpenClaw
 ```json
 {
   "workspace": "~/.openclaw/workspace",
+  "ha_url": "http://localhost:8123",
+  "ha_token": "your_token_here",
+  "cron_time": "03:00",
+  "devices": []
+}
+```
+
+### Hermes
+```json
+{
+  "workspace": "~/.hermes",
   "ha_url": "http://localhost:8123",
   "ha_token": "your_token_here",
   "cron_time": "03:00",
@@ -273,4 +278,5 @@ MIT License — Free to use, modify, commercialize / 可自由使用、修改、
 
 - **Karpathy** — [LLM-Wiki Pattern](https://github.com/karpathy/llm-wiki) Theory
 - **OpenClaw** — Agent Framework
+- **Hermes** — Agent Framework
 - **Mem0** — Intelligent Memory System Reference
